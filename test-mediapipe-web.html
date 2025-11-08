@@ -237,6 +237,18 @@
                     }
                 });
                 video.srcObject = stream;
+                
+                // Wait for video to be ready
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        resolve();
+                    };
+                });
+                
+                // Additional wait to ensure video dimensions are available
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
                 return true;
             } catch (error) {
                 console.error('Camera error:', error);
@@ -254,7 +266,8 @@
             analysisEl.style.display = 'block';
             updateStatus('🎥 Detecting pose... Stand in front of camera!', 'success');
 
-            detectPose();
+            // Wait a bit more before starting detection
+            setTimeout(() => detectPose(), 100);
         }
 
         function stopDetection() {
@@ -292,6 +305,13 @@
             const now = performance.now();
 
             try {
+                // Check if video is ready
+                if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+                    console.log('Video not ready yet, waiting...');
+                    animationFrameId = requestAnimationFrame(detectPose);
+                    return;
+                }
+
                 const result = poseLandmarker.detectForVideo(video, now);
 
                 // Clear canvas
