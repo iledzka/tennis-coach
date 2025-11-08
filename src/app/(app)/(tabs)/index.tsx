@@ -1,7 +1,7 @@
 import Stack, { VStack } from '@nkzw/stack';
-import { Stack as ExpoStack } from 'expo-router';
+import { Link, Stack as ExpoStack } from 'expo-router';
 import { fbs } from 'fbtee';
-import { View } from 'react-native';
+import { TouchableOpacity, View } from 'react-native';
 import { cx } from 'src/lib/cx.tsx';
 import Text from 'src/ui/Text.tsx';
 
@@ -34,6 +34,15 @@ export default function Index() {
             </fbt>
           </Text>
         </Stack>
+        <Link href="/pose-detection" asChild>
+          <TouchableOpacity
+            className="mt-8 rounded-lg bg-accent px-6 py-3"
+          >
+            <Text className="text-center font-bold text-white">
+              <fbt desc="Pose detection button">Try Pose Detection POC</fbt>
+            </Text>
+          </TouchableOpacity>
+        </Link>
       </VStack>
     </>
   );
