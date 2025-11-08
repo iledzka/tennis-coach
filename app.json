@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "NKZW App",
-    "slug": "nkzw-app",
+    "name": "Tennis Serve Coach",
+    "slug": "tennis-serve-coach",
     "version": "1.0.0",
-    "scheme": "nkzw-app",
+    "scheme": "tennis-serve-coach",
     "web": {
       "bundler": "metro",
       "output": "static",
@@ -19,7 +19,15 @@
       ],
       "expo-localization",
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Tennis Serve Coach to access your camera to record your serve.",
+          "microphonePermission": "Allow Tennis Serve Coach to access your microphone to record audio with your videos.",
+          "recordAudioAndroid": true
+        }
+      ]
     ],
     "experiments": {
       "reactCanary": true,
@@ -41,9 +49,11 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.nkzw.www",
+      "bundleIdentifier": "com.tennisservecoach.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "This app needs camera access to record your tennis serve and provide real-time feedback on your form.",
+        "NSMicrophoneUsageDescription": "This app needs microphone access to record audio with your serve videos."
       }
     },
     "android": {
@@ -51,8 +61,14 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "app.nkzw.www",
-      "predictiveBackGestureEnabled": true
+      "package": "com.tennisservecoach.app",
+      "predictiveBackGestureEnabled": true,
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "newArchEnabled": true,
     "extra": {
