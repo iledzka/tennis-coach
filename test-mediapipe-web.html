@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediaPipe Pose Detection Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #00ff00;
+        }
+        .video-container {
+            position: relative;
+            width: 640px;
+            height: 480px;
+            margin: 20px auto;
+            background: #000;
+        }
+        #video {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        #canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            padding: 12px 24px;
+            margin: 0 10px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #00ff00;
+            border: none;
+            border-radius: 5px;
+            color: #000;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #00cc00;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.success {
+            background: #004400;
+            color: #00ff00;
+        }
+        .status.error {
+            background: #440000;
+            color: #ff0000;
+        }
+        .status.info {
+            background: #004444;
+            color: #00ffff;
+        }
+        .analysis {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px auto;
+            max-width: 600px;
+        }
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+        .metric-label {
+            font-weight: bold;
+        }
+        .metric-value {
+            font-family: monospace;
+        }
+        .suggestions {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 255, 0, 0.1);
+            border-left: 4px solid #00ff00;
+            border-radius: 5px;
+        }
+        .suggestions h3 {
+            margin-top: 0;
+            color: #00ff00;
+        }
+        .suggestion-item {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+        .suggestion-item:before {
+            content: "→ ";
+            color: #00ff00;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎾 MediaPipe Pose Detection Test</h1>
+        
+        <div id="status" class="status info">
+            Initializing MediaPipe...
+        </div>
+
+        <div class="video-container">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas" width="640" height="480"></canvas>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" disabled>Start Detection</button>
+            <button id="stopBtn" disabled>Stop Detection</button>
+            <button id="flipBtn" disabled>Flip Camera</button>
+        </div>
+
+        <div id="analysis" class="analysis" style="display: none;">
+            <h2>Tennis Posture Analysis</h2>
+            <div class="metric">
+                <span class="metric-label">FPS:</span>
+                <span id="fps" class="metric-value">0</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Shoulder Alignment:</span>
+                <span id="shoulder" class="metric-value">0%</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Hip Alignment:</span>
+                <span id="hip" class="metric-value">0%</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Knee Flexion:</span>
+                <span id="knee" class="metric-value">0%</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Balance Score:</span>
+                <span id="balance" class="metric-value">0%</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Racket Position:</span>
+                <span id="position" class="metric-value">unknown</span>
+            </div>
+            <div class="suggestions">
+                <h3>Coaching Suggestions</h3>
+                <div id="suggestions"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { PoseLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm';
+
+        let poseLandmarker;
+        let video;
+        let canvas;
+        let ctx;
+        let isDetecting = false;
+        let animationFrameId;
+        let lastFrameTime = 0;
+        let fpsCounter = [];
+        let facingMode = 'user'; // 'user' = front, 'environment' = back
+
+        const statusEl = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const flipBtn = document.getElementById('flipBtn');
+        const analysisEl = document.getElementById('analysis');
+
+        // Initialize
+        async function init() {
+            try {
+                video = document.getElementById('video');
+                canvas = document.getElementById('canvas');
+                ctx = canvas.getContext('2d');
+
+                updateStatus('Loading MediaPipe model...', 'info');
+
+                const vision = await FilesetResolver.forVisionTasks(
+                    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+                );
+
+                poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+                    baseOptions: {
+                        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+                        delegate: 'GPU',
+                    },
+                    runningMode: 'VIDEO',
+                    numPoses: 1,
+                    minPoseDetectionConfidence: 0.5,
+                    minPosePresenceConfidence: 0.5,
+                    minTrackingConfidence: 0.5,
+                });
+
+                updateStatus('✅ MediaPipe initialized! Click "Start Detection" to begin.', 'success');
+                startBtn.disabled = false;
+                flipBtn.disabled = false;
+
+            } catch (error) {
+                console.error('Initialization error:', error);
+                updateStatus('❌ Failed to initialize: ' + error.message, 'error');
+            }
+        }
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: facingMode,
+                        width: 640,
+                        height: 480
+                    }
+                });
+                video.srcObject = stream;
+                return true;
+            } catch (error) {
+                console.error('Camera error:', error);
+                updateStatus('❌ Camera access denied: ' + error.message, 'error');
+                return false;
+            }
+        }
+
+        async function startDetection() {
+            if (!await startCamera()) return;
+
+            isDetecting = true;
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            analysisEl.style.display = 'block';
+            updateStatus('🎥 Detecting pose... Stand in front of camera!', 'success');
+
+            detectPose();
+        }
+
+        function stopDetection() {
+            isDetecting = false;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            analysisEl.style.display = 'none';
+            updateStatus('⏸️ Detection stopped', 'info');
+        }
+
+        async function flipCamera() {
+            const wasDetecting = isDetecting;
+            if (wasDetecting) {
+                stopDetection();
+            }
+            
+            facingMode = facingMode === 'user' ? 'environment' : 'user';
+            
+            if (wasDetecting) {
+                setTimeout(() => startDetection(), 500);
+            }
+        }
+
+        function detectPose() {
+            if (!isDetecting) return;
+
+            const now = performance.now();
+
+            try {
+                const result = poseLandmarker.detectForVideo(video, now);
+
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (result.landmarks && result.landmarks.length > 0) {
+                    const landmarks = result.landmarks[0];
+
+                    // Draw skeleton
+                    drawLandmarks(landmarks);
+
+                    // Analyze posture
+                    const analysis = analyzeTennisPosture(landmarks);
+                    updateAnalysisUI(analysis);
+
+                    // Calculate FPS
+                    const deltaTime = now - lastFrameTime;
+                    if (deltaTime > 0) {
+                        fpsCounter.push(1000 / deltaTime);
+                        if (fpsCounter.length > 30) fpsCounter.shift();
+                        const avgFps = fpsCounter.reduce((a, b) => a + b, 0) / fpsCounter.length;
+                        document.getElementById('fps').textContent = Math.round(avgFps);
+                    }
+                    lastFrameTime = now;
+                }
+
+            } catch (error) {
+                console.error('Detection error:', error);
+            }
+
+            animationFrameId = requestAnimationFrame(detectPose);
+        }
+
+        function drawLandmarks(landmarks) {
+            // Draw connections
+            const connections = [
+                [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+                [11, 23], [12, 24], [23, 24],
+                [23, 25], [25, 27], [24, 26], [26, 28]
+            ];
+
+            ctx.strokeStyle = '#00FF00';
+            ctx.lineWidth = 2;
+
+            connections.forEach(([start, end]) => {
+                if (landmarks[start] && landmarks[end]) {
+                    ctx.beginPath();
+                    ctx.moveTo(landmarks[start].x * canvas.width, landmarks[start].y * canvas.height);
+                    ctx.lineTo(landmarks[end].x * canvas.width, landmarks[end].y * canvas.height);
+                    ctx.stroke();
+                }
+            });
+
+            // Draw points
+            ctx.fillStyle = '#FF0000';
+            landmarks.forEach(landmark => {
+                ctx.beginPath();
+                ctx.arc(landmark.x * canvas.width, landmark.y * canvas.height, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
+
+        function analyzeTennisPosture(landmarks) {
+            const shoulderDiff = Math.abs(landmarks[11].y - landmarks[12].y);
+            const shoulderAlignment = Math.max(0, 100 - shoulderDiff * 500);
+
+            const hipDiff = Math.abs(landmarks[23].y - landmarks[24].y);
+            const hipAlignment = Math.max(0, 100 - hipDiff * 500);
+
+            const leftKneeAngle = calculateAngle(landmarks[23], landmarks[25], landmarks[27]);
+            const rightKneeAngle = calculateAngle(landmarks[24], landmarks[26], landmarks[28]);
+            const avgKneeAngle = (leftKneeAngle + rightKneeAngle) / 2;
+            const kneeFlexion = 100 - Math.abs(150 - avgKneeAngle) * 2;
+
+            const centerX = (landmarks[23].x + landmarks[24].x) / 2;
+            const feetCenterX = (landmarks[27].x + landmarks[28].x) / 2;
+            const balanceOffset = Math.abs(centerX - feetCenterX);
+            const balanceScore = Math.max(0, 100 - balanceOffset * 300);
+
+            const avgWristY = (landmarks[15].y + landmarks[16].y) / 2;
+            const avgShoulderY = (landmarks[11].y + landmarks[12].y) / 2;
+            let racketPosition = 'unknown';
+            if (avgWristY < avgShoulderY - 0.1) racketPosition = 'follow-through';
+            else if (avgWristY > avgShoulderY + 0.15) racketPosition = 'backswing';
+            else racketPosition = 'ready';
+
+            const suggestions = [];
+            if (shoulderAlignment < 70) suggestions.push('Keep your shoulders level and aligned');
+            if (hipAlignment < 70) suggestions.push('Align your hips for better stability');
+            if (avgKneeAngle > 165) suggestions.push('Bend your knees more for better readiness');
+            if (balanceScore < 70) suggestions.push('Improve your balance - center your weight');
+            if (suggestions.length === 0) suggestions.push('Great form! Keep it up!');
+
+            return {
+                shoulderAlignment: Math.round(shoulderAlignment),
+                hipAlignment: Math.round(hipAlignment),
+                kneeFlexion: Math.round(kneeFlexion),
+                balanceScore: Math.round(balanceScore),
+                racketPosition,
+                suggestions
+            };
+        }
+
+        function calculateAngle(a, b, c) {
+            const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+            let angle = Math.abs((radians * 180.0) / Math.PI);
+            if (angle > 180.0) angle = 360 - angle;
+            return angle;
+        }
+
+        function updateAnalysisUI(analysis) {
+            document.getElementById('shoulder').textContent = analysis.shoulderAlignment + '%';
+            document.getElementById('hip').textContent = analysis.hipAlignment + '%';
+            document.getElementById('knee').textContent = analysis.kneeFlexion + '%';
+            document.getElementById('balance').textContent = analysis.balanceScore + '%';
+            document.getElementById('position').textContent = analysis.racketPosition;
+
+            const suggestionsEl = document.getElementById('suggestions');
+            suggestionsEl.innerHTML = analysis.suggestions
+                .map(s => `<div class="suggestion-item">${s}</div>`)
+                .join('');
+        }
+
+        function updateStatus(message, type) {
+            statusEl.textContent = message;
+            statusEl.className = 'status ' + type;
+        }
+
+        // Event listeners
+        startBtn.addEventListener('click', startDetection);
+        stopBtn.addEventListener('click', stopDetection);
+        flipBtn.addEventListener('click', flipCamera);
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>
