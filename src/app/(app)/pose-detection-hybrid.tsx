@@ -479,13 +479,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingHorizontal: 20,
+    zIndex: 100,
+    elevation: 100,
   },
   button: {
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#fff',
   },
   buttonActive: {
@@ -505,6 +507,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 200,
+    elevation: 200,
   },
   loadingText: {
     color: '#fff',
@@ -516,6 +520,8 @@ const styles = StyleSheet.create({
     top: 60,
     left: 16,
     right: 16,
+    zIndex: 50,
+    elevation: 50,
   },
   analysisPanel: {
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
@@ -567,6 +573,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     padding: 8,
     borderRadius: 5,
+    zIndex: 10,
+    elevation: 10,
   },
   debugTitle: {
     color: '#00ff00',
