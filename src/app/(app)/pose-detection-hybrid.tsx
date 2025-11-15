@@ -49,7 +49,9 @@ export default function PoseDetectionHybridScreen() {
           setIsMediaPipeReady(true);
           break;
         case 'analysis':
-          setAnalysis(data.payload);
+          if (isDetecting) {
+            setAnalysis(data.payload);
+          }
           processingRef.current = false; // Ready for next frame
           break;
         case 'error':
@@ -63,11 +65,12 @@ export default function PoseDetectionHybridScreen() {
       }
     } catch (err) {
       addLog(`Parse error: ${err}`);
+      processingRef.current = false;
     }
   };
 
   const captureAndProcess = async () => {
-    if (!cameraRef.current || !isMediaPipeReady || processingRef.current) {
+    if (!cameraRef.current || !isMediaPipeReady || processingRef.current || !isDetecting) {
       return;
     }
 
@@ -81,7 +84,7 @@ export default function PoseDetectionHybridScreen() {
         skipProcessing: true,
       });
 
-      if (photo?.base64) {
+      if (photo?.base64 && isDetecting) {
         // Send to WebView for processing
         webViewRef.current?.postMessage(JSON.stringify({
           type: 'processFrame',
@@ -98,13 +101,19 @@ export default function PoseDetectionHybridScreen() {
   };
 
   useEffect(() => {
-    if (!isDetecting || !isMediaPipeReady) return;
+    if (!isDetecting || !isMediaPipeReady) {
+      processingRef.current = false;
+      return;
+    }
 
     const interval = setInterval(() => {
       captureAndProcess();
     }, 100); // 10 FPS
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      processingRef.current = false;
+    };
   }, [isDetecting, isMediaPipeReady]);
 
   const toggleCameraFacing = () => {
@@ -329,7 +338,16 @@ export default function PoseDetectionHybridScreen() {
 
             <TouchableOpacity
               style={[styles.button, isDetecting && styles.buttonActive]}
-              onPress={() => setIsDetecting(!isDetecting)}
+              onPress={() => {
+                const newState = !isDetecting;
+                setIsDetecting(newState);
+                if (!newState) {
+                  // Stopping - clear analysis
+                  setAnalysis(null);
+                  processingRef.current = false;
+                  addLog('Detection stopped');
+                }
+              }}
               disabled={!isMediaPipeReady}
             >
               <Text style={styles.text}>
