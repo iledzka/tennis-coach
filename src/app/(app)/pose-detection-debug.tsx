@@ -5,91 +5,73 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 
 interface PoseAnalysis {
-  balanceScore: number;
-  fps: number;
+  shoulderAlignment: number;
   hipAlignment: number;
   kneeFlexion: number;
+  balanceScore: number;
   racketPosition: string;
-  shoulderAlignment: number;
-  suggestions: Array<string>;
+  suggestions: string[];
+  fps: number;
 }
 
-export default function PoseDetectionWebViewScreen() {
+export default function PoseDetectionDebugScreen() {
   const webViewRef = useRef<WebView>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [analysis, setAnalysis] = useState<PoseAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [logs, setLogs] = useState<string[]>([]);
+
+  const addLog = (message: string) => {
+    console.log('📝', message);
+    setLogs(prev => [...prev.slice(-10), `${new Date().toLocaleTimeString()}: ${message}`]);
+  };
 
   const handleMessage = (event: WebViewMessageEvent) => {
     try {
-      console.log('📨 Received message from WebView:', event.nativeEvent.data);
+      addLog(`Received: ${event.nativeEvent.data.substring(0, 100)}`);
       const data = JSON.parse(event.nativeEvent.data);
-      console.log('📦 Parsed data:', data);
-
-      if (data.type === 'analysis') {
-        setAnalysis(data.payload);
-      } else if (data.type === 'error') {
-        console.error('❌ WebView error:', data.message);
-        setError(data.message);
-      } else if (data.type === 'ready') {
-        console.log('✅ WebView ready');
-        setIsLoading(false);
-      } else if (data.type === 'log') {
-        console.log('🔍 WebView log:', data.message);
+      
+      switch (data.type) {
+        case 'analysis':
+          setAnalysis(data.payload);
+          break;
+        case 'error':
+          addLog(`Error: ${data.message}`);
+          setError(data.message);
+          setIsLoading(false);
+          break;
+        case 'ready':
+          addLog('WebView ready!');
+          setIsLoading(false);
+          break;
+        case 'log':
+          addLog(`WebView: ${data.message}`);
+          break;
+        case 'init':
+          addLog(`Init: ${data.message}`);
+          break;
       }
-    } catch (error_) {
-      console.error('❌ Failed to parse WebView message:', error_);
-      console.error('Raw data:', event.nativeEvent.data);
+    } catch (err) {
+      addLog(`Parse error: ${err}`);
     }
   };
 
-  // HTML content with MediaPipe pose detection
   const htmlContent = `
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            background: #000;
-            overflow: hidden;
-            width: 100vw;
-            height: 100vh;
-        }
-        #container {
-            position: relative;
-            width: 100%;
-            height: 100%;
-        }
-        #video {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        #canvas {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; }
+        #container { position: relative; width: 100vw; height: 100vh; }
+        #video { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+        #canvas { position: absolute; width: 100%; height: 100%; pointer-events: none; }
         #status {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            font-family: Arial, sans-serif;
-            font-size: 14px;
+            position: absolute; top: 20px; left: 20px; right: 20px;
+            background: rgba(0, 0, 0, 0.8); color: white; padding: 10px;
+            border-radius: 5px; font-family: Arial, sans-serif; font-size: 14px;
             z-index: 10;
         }
     </style>
@@ -101,53 +83,90 @@ export default function PoseDetectionWebViewScreen() {
         <div id="status">Initializing...</div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.js"></script>
-    
     <script>
-        let poseLandmarker;
-        let video;
-        let canvas;
-        let ctx;
+        // Test message sending immediately
+        function sendMessage(type, payload) {
+            try {
+                const msg = JSON.stringify({ type, payload: payload || {} });
+                
+                if (window.ReactNativeWebView) {
+                    window.ReactNativeWebView.postMessage(msg);
+                    return true;
+                } else {
+                    console.error('ReactNativeWebView not found');
+                    return false;
+                }
+            } catch (e) {
+                console.error('Send error:', e);
+                return false;
+            }
+        }
+
+        // Send test message immediately
+        setTimeout(() => {
+            const sent = sendMessage('init', { message: 'WebView script loaded' });
+            console.log('Test message sent:', sent);
+        }, 100);
+
+        let video, canvas, ctx, poseLandmarker;
         let isDetecting = false;
         let animationFrameId;
         let lastFrameTime = 0;
         let fpsCounter = [];
 
-        function sendMessage(type, payload) {
-            if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type, payload }));
-            }
-        }
-
-        function updateStatus(message) {
-            document.getElementById('status').textContent = message;
+        function updateStatus(msg) {
+            document.getElementById('status').textContent = msg;
+            sendMessage('log', { message: msg });
         }
 
         async function init() {
             try {
+                sendMessage('init', { message: 'Starting initialization' });
+                
                 video = document.getElementById('video');
                 canvas = document.getElementById('canvas');
                 ctx = canvas.getContext('2d');
 
-                updateStatus('Loading MediaPipe...');
+                updateStatus('Waiting for MediaPipe library...');
 
-                await new Promise(resolve => {
-                    if (window.vision) {
-                        resolve();
-                    } else {
-                        const checkInterval = setInterval(() => {
-                            if (window.vision) {
-                                clearInterval(checkInterval);
-                                resolve();
-                            }
-                        }, 100);
-                    }
-                });
+                // Load MediaPipe script dynamically
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.js';
+                script.onload = async () => {
+                    sendMessage('init', { message: 'MediaPipe script loaded' });
+                    await initMediaPipe();
+                };
+                script.onerror = (e) => {
+                    sendMessage('error', { message: 'Failed to load MediaPipe script' });
+                };
+                document.head.appendChild(script);
 
+            } catch (error) {
+                sendMessage('error', { message: 'Init error: ' + error.message });
+            }
+        }
+
+        async function initMediaPipe() {
+            try {
+                updateStatus('Initializing MediaPipe...');
+
+                // Wait for vision object
+                let attempts = 0;
+                while (!window.vision && attempts < 50) {
+                    await new Promise(r => setTimeout(r, 100));
+                    attempts++;
+                }
+
+                if (!window.vision) {
+                    throw new Error('MediaPipe vision not available');
+                }
+
+                sendMessage('init', { message: 'Creating FilesetResolver' });
                 const vision = await window.vision.FilesetResolver.forVisionTasks(
                     'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
                 );
 
+                sendMessage('init', { message: 'Creating PoseLandmarker' });
                 poseLandmarker = await window.vision.PoseLandmarker.createFromOptions(vision, {
                     baseOptions: {
                         modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
@@ -160,18 +179,15 @@ export default function PoseDetectionWebViewScreen() {
                     minTrackingConfidence: 0.5,
                 });
 
-                updateStatus('Starting camera...');
+                sendMessage('init', { message: 'Starting camera' });
                 await startCamera();
                 
                 sendMessage('ready', {});
                 updateStatus('Detecting pose...');
-                
                 startDetection();
 
             } catch (error) {
-                console.error('Initialization error:', error);
-                updateStatus('Error: ' + error.message);
-                sendMessage('error', { message: error.message });
+                sendMessage('error', { message: 'MediaPipe init error: ' + error.message });
             }
         }
 
@@ -189,19 +205,16 @@ export default function PoseDetectionWebViewScreen() {
                 await new Promise((resolve) => {
                     video.onloadedmetadata = () => {
                         video.play();
-                        
-                        // Set canvas size to match video
                         canvas.width = video.videoWidth;
                         canvas.height = video.videoHeight;
-                        
                         resolve();
                     };
                 });
                 
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(r => setTimeout(r, 500));
                 
             } catch (error) {
-                throw new Error('Camera access denied: ' + error.message);
+                throw new Error('Camera error: ' + error.message);
             }
         }
 
@@ -222,16 +235,13 @@ export default function PoseDetectionWebViewScreen() {
                 }
 
                 const result = poseLandmarker.detectForVideo(video, now);
-
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
                 if (result.landmarks && result.landmarks.length > 0) {
                     const landmarks = result.landmarks[0];
-
                     drawLandmarks(landmarks);
                     const analysis = analyzeTennisPosture(landmarks);
                     
-                    // Calculate FPS
                     const deltaTime = now - lastFrameTime;
                     if (deltaTime > 0) {
                         fpsCounter.push(1000 / deltaTime);
@@ -245,8 +255,7 @@ export default function PoseDetectionWebViewScreen() {
                 }
 
             } catch (error) {
-                console.error('Detection error:', error);
-                sendMessage('error', { message: error.message });
+                sendMessage('error', { message: 'Detection error: ' + error.message });
             }
 
             animationFrameId = requestAnimationFrame(detectPose);
@@ -327,6 +336,7 @@ export default function PoseDetectionWebViewScreen() {
             return angle;
         }
 
+        // Start initialization
         init();
     </script>
 </body>
@@ -337,40 +347,34 @@ export default function PoseDetectionWebViewScreen() {
     <>
       <Stack.Screen
         options={{
+          title: String(fbs('Pose Detection (Debug)', 'Debug pose detection screen title')),
           headerShown: true,
-          title: String(fbs('Pose Detection', 'Pose detection screen title')),
         }}
       />
       <View style={styles.container}>
         <WebView
-          allowsInlineMediaPlayback={true}
-          domStorageEnabled={true}
-          javaScriptEnabled={true}
-          mediaPlaybackRequiresUserAction={false}
-          onError={(syntheticEvent) => {
-            const { nativeEvent } = syntheticEvent;
-            console.error('❌ WebView error:', nativeEvent);
-            setError('WebView failed to load');
-          }}
-          onLoadEnd={() => {
-            console.log('✅ WebView loading completed');
-          }}
-          onLoadProgress={({ nativeEvent }) => {
-            console.log('📊 WebView load progress:', nativeEvent.progress);
-          }}
-          onLoadStart={() => {
-            console.log('� WebView loading started');
-          }}
-          onMessage={handleMessage}
           ref={webViewRef}
           source={{ html: htmlContent }}
-          startInLoadingState={false}
           style={styles.webview}
+          onMessage={handleMessage}
+          mediaPlaybackRequiresUserAction={false}
+          allowsInlineMediaPlayback={true}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          startInLoadingState={false}
+          onError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            addLog(`WebView error: ${JSON.stringify(nativeEvent)}`);
+            setError('WebView failed to load');
+          }}
+          onLoadStart={() => addLog('WebView loading started')}
+          onLoadEnd={() => addLog('WebView loading completed')}
+          onLoadProgress={({ nativeEvent }) => addLog(`Load progress: ${nativeEvent.progress * 100}%`)}
         />
 
         {isLoading && (
           <View style={styles.loadingOverlay}>
-            <ActivityIndicator color="#00ff00" size="large" />
+            <ActivityIndicator size="large" color="#00ff00" />
             <Text style={styles.loadingText}>
               <fbt desc="Loading message">Loading MediaPipe...</fbt>
             </Text>
@@ -386,88 +390,50 @@ export default function PoseDetectionWebViewScreen() {
         {analysis && !isLoading && (
           <View style={styles.analysisOverlay}>
             <View style={styles.analysisPanel}>
-              <Text style={styles.analysisTitle}>
-                <fbt desc="Analysis title">Tennis Posture Analysis</fbt>
-              </Text>
-
+              <Text style={styles.analysisTitle}>Analysis</Text>
+              
               <View style={styles.metricsGrid}>
                 <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>
-                    <fbt desc="FPS label">FPS</fbt>
-                  </Text>
+                  <Text style={styles.metricLabel}>FPS</Text>
                   <Text style={styles.metricValue}>{analysis.fps}</Text>
                 </View>
 
                 <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>
-                    <fbt desc="Shoulder label">Shoulder</fbt>
-                  </Text>
-                  <Text
-                    style={[
-                      styles.metricValue,
-                      getScoreColor(analysis.shoulderAlignment),
-                    ]}
-                  >
+                  <Text style={styles.metricLabel}>Shoulder</Text>
+                  <Text style={[styles.metricValue, getScoreColor(analysis.shoulderAlignment)]}>
                     {analysis.shoulderAlignment}%
                   </Text>
                 </View>
 
                 <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>
-                    <fbt desc="Hip label">Hip</fbt>
-                  </Text>
-                  <Text
-                    style={[
-                      styles.metricValue,
-                      getScoreColor(analysis.hipAlignment),
-                    ]}
-                  >
+                  <Text style={styles.metricLabel}>Hip</Text>
+                  <Text style={[styles.metricValue, getScoreColor(analysis.hipAlignment)]}>
                     {analysis.hipAlignment}%
                   </Text>
                 </View>
 
                 <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>
-                    <fbt desc="Knee label">Knee</fbt>
-                  </Text>
-                  <Text
-                    style={[
-                      styles.metricValue,
-                      getScoreColor(analysis.kneeFlexion),
-                    ]}
-                  >
+                  <Text style={styles.metricLabel}>Knee</Text>
+                  <Text style={[styles.metricValue, getScoreColor(analysis.kneeFlexion)]}>
                     {analysis.kneeFlexion}%
                   </Text>
                 </View>
 
                 <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>
-                    <fbt desc="Balance label">Balance</fbt>
-                  </Text>
-                  <Text
-                    style={[
-                      styles.metricValue,
-                      getScoreColor(analysis.balanceScore),
-                    ]}
-                  >
+                  <Text style={styles.metricLabel}>Balance</Text>
+                  <Text style={[styles.metricValue, getScoreColor(analysis.balanceScore)]}>
                     {analysis.balanceScore}%
                   </Text>
                 </View>
 
                 <View style={styles.metric}>
-                  <Text style={styles.metricLabel}>
-                    <fbt desc="Position label">Position</fbt>
-                  </Text>
-                  <Text style={styles.metricValue}>
-                    {analysis.racketPosition}
-                  </Text>
+                  <Text style={styles.metricLabel}>Position</Text>
+                  <Text style={styles.metricValue}>{analysis.racketPosition}</Text>
                 </View>
               </View>
 
               <View style={styles.suggestions}>
-                <Text style={styles.suggestionsTitle}>
-                  <fbt desc="Suggestions title">Coaching Tips</fbt>
-                </Text>
+                <Text style={styles.suggestionsTitle}>Tips</Text>
                 {analysis.suggestions.map((suggestion, index) => (
                   <Text key={index} style={styles.suggestionText}>
                     • {suggestion}
@@ -477,27 +443,68 @@ export default function PoseDetectionWebViewScreen() {
             </View>
           </View>
         )}
+
+        {/* Debug logs */}
+        <View style={styles.debugPanel}>
+          <Text style={styles.debugTitle}>Debug Logs:</Text>
+          {logs.map((log, index) => (
+            <Text key={index} style={styles.debugText}>{log}</Text>
+          ))}
+        </View>
       </View>
     </>
   );
 }
 
 function getScoreColor(score: number) {
-  if (score >= 80) {
-    return { color: '#00FF00' };
-  }
-  if (score >= 60) {
-    return { color: '#FFFF00' };
-  }
+  if (score >= 80) return { color: '#00FF00' };
+  if (score >= 60) return { color: '#FFFF00' };
   return { color: '#FF0000' };
 }
 
 const styles = StyleSheet.create({
-  analysisOverlay: {
-    left: 16,
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  webview: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  loadingOverlay: {
     position: 'absolute',
-    right: 16,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#fff',
+    marginTop: 16,
+    fontSize: 16,
+  },
+  errorOverlay: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(255, 0, 0, 0.9)',
+    padding: 16,
+    borderRadius: 8,
+  },
+  errorText: {
+    color: '#fff',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  analysisOverlay: {
+    position: 'absolute',
     top: 60,
+    left: 16,
+    right: 16,
   },
   analysisPanel: {
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
@@ -505,83 +512,66 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   analysisTitle: {
-    color: '#00FF00',
     fontSize: 18,
     fontWeight: 'bold',
+    color: '#00FF00',
     marginBottom: 12,
     textAlign: 'center',
-  },
-  container: {
-    backgroundColor: '#000',
-    flex: 1,
-  },
-  errorOverlay: {
-    backgroundColor: 'rgba(255, 0, 0, 0.9)',
-    borderRadius: 8,
-    left: 20,
-    padding: 16,
-    position: 'absolute',
-    right: 20,
-    top: 20,
-  },
-  errorText: {
-    color: '#fff',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  loadingOverlay: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    bottom: 0,
-    justifyContent: 'center',
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-  },
-  loadingText: {
-    color: '#fff',
-    fontSize: 16,
-    marginTop: 16,
-  },
-  metric: {
-    marginBottom: 12,
-    width: '30%',
-  },
-  metricLabel: {
-    color: '#aaa',
-    fontSize: 11,
-    marginBottom: 4,
   },
   metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
+  metric: {
+    width: '30%',
+    marginBottom: 12,
+  },
+  metricLabel: {
+    fontSize: 11,
+    color: '#aaa',
+    marginBottom: 4,
+  },
   metricValue: {
-    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    color: '#fff',
   },
   suggestions: {
-    borderTopColor: '#333',
-    borderTopWidth: 1,
     marginTop: 12,
     paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
   },
   suggestionsTitle: {
-    color: '#00FF00',
     fontSize: 14,
     fontWeight: 'bold',
+    color: '#00FF00',
     marginBottom: 8,
   },
   suggestionText: {
-    color: '#fff',
     fontSize: 12,
+    color: '#fff',
     marginBottom: 4,
   },
-  webview: {
-    backgroundColor: '#000',
-    flex: 1,
+  debugPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    padding: 10,
+    maxHeight: 150,
+  },
+  debugTitle: {
+    color: '#00ff00',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  debugText: {
+    color: '#fff',
+    fontSize: 10,
+    fontFamily: 'monospace',
   },
 });
