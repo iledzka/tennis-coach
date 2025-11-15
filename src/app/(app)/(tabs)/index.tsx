@@ -34,15 +34,27 @@ export default function Index() {
             </fbt>
           </Text>
         </Stack>
-        <Link href="/pose-detection-webview" asChild>
-          <TouchableOpacity
-            className="mt-8 rounded-lg bg-accent px-6 py-3"
-          >
-            <Text className="text-center font-bold text-white">
-              <fbt desc="Pose detection button">Try Pose Detection (WebView)</fbt>
-            </Text>
-          </TouchableOpacity>
-        </Link>
+        <Stack gap={16} className="mt-8">
+          <Link href="/pose-detection-webview" asChild>
+            <TouchableOpacity
+              className="rounded-lg bg-accent px-6 py-3"
+            >
+              <Text className="text-center font-bold text-white">
+                <fbt desc="Pose detection button">Live Pose Detection</fbt>
+              </Text>
+            </TouchableOpacity>
+          </Link>
+          
+          <Link href="/video-analysis" asChild>
+            <TouchableOpacity
+              className="rounded-lg bg-accent px-6 py-3"
+            >
+              <Text className="text-center font-bold text-white">
+                <fbt desc="Video analysis button">Analyze Video</fbt>
+              </Text>
+            </TouchableOpacity>
+          </Link>
+        </Stack>
       </VStack>
     </>
   );
