@@ -5,13 +5,13 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 
 interface PoseAnalysis {
-  shoulderAlignment: number;
+  balanceScore: number;
+  fps: number;
   hipAlignment: number;
   kneeFlexion: number;
-  balanceScore: number;
   racketPosition: string;
-  suggestions: string[];
-  fps: number;
+  shoulderAlignment: number;
+  suggestions: Array<string>;
 }
 
 export default function PoseDetectionWebViewScreen() {
@@ -23,7 +23,7 @@ export default function PoseDetectionWebViewScreen() {
   const handleMessage = (event: WebViewMessageEvent) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      
+      console.log(event);
       if (data.type === 'analysis') {
         setAnalysis(data.payload);
       } else if (data.type === 'error') {
@@ -31,8 +31,8 @@ export default function PoseDetectionWebViewScreen() {
       } else if (data.type === 'ready') {
         setIsLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to parse WebView message:', err);
+    } catch (error_) {
+      console.error('Failed to parse WebView message:', error_);
     }
   };
 
@@ -330,31 +330,31 @@ export default function PoseDetectionWebViewScreen() {
     <>
       <Stack.Screen
         options={{
-          title: String(fbs('Pose Detection', 'Pose detection screen title')),
           headerShown: true,
+          title: String(fbs('Pose Detection', 'Pose detection screen title')),
         }}
       />
       <View style={styles.container}>
         <WebView
-          ref={webViewRef}
-          source={{ html: htmlContent }}
-          style={styles.webview}
-          onMessage={handleMessage}
-          mediaPlaybackRequiresUserAction={false}
           allowsInlineMediaPlayback={true}
-          javaScriptEnabled={true}
           domStorageEnabled={true}
-          startInLoadingState={false}
+          javaScriptEnabled={true}
+          mediaPlaybackRequiresUserAction={false}
           onError={(syntheticEvent) => {
             const { nativeEvent } = syntheticEvent;
             console.error('WebView error:', nativeEvent);
             setError('WebView failed to load');
           }}
+          onMessage={handleMessage}
+          ref={webViewRef}
+          source={{ html: htmlContent }}
+          startInLoadingState={false}
+          style={styles.webview}
         />
 
         {isLoading && (
           <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color="#00ff00" />
+            <ActivityIndicator color="#00ff00" size="large" />
             <Text style={styles.loadingText}>
               <fbt desc="Loading message">Loading MediaPipe...</fbt>
             </Text>
@@ -373,7 +373,7 @@ export default function PoseDetectionWebViewScreen() {
               <Text style={styles.analysisTitle}>
                 <fbt desc="Analysis title">Tennis Posture Analysis</fbt>
               </Text>
-              
+
               <View style={styles.metricsGrid}>
                 <View style={styles.metric}>
                   <Text style={styles.metricLabel}>
@@ -386,7 +386,12 @@ export default function PoseDetectionWebViewScreen() {
                   <Text style={styles.metricLabel}>
                     <fbt desc="Shoulder label">Shoulder</fbt>
                   </Text>
-                  <Text style={[styles.metricValue, getScoreColor(analysis.shoulderAlignment)]}>
+                  <Text
+                    style={[
+                      styles.metricValue,
+                      getScoreColor(analysis.shoulderAlignment),
+                    ]}
+                  >
                     {analysis.shoulderAlignment}%
                   </Text>
                 </View>
@@ -395,7 +400,12 @@ export default function PoseDetectionWebViewScreen() {
                   <Text style={styles.metricLabel}>
                     <fbt desc="Hip label">Hip</fbt>
                   </Text>
-                  <Text style={[styles.metricValue, getScoreColor(analysis.hipAlignment)]}>
+                  <Text
+                    style={[
+                      styles.metricValue,
+                      getScoreColor(analysis.hipAlignment),
+                    ]}
+                  >
                     {analysis.hipAlignment}%
                   </Text>
                 </View>
@@ -404,7 +414,12 @@ export default function PoseDetectionWebViewScreen() {
                   <Text style={styles.metricLabel}>
                     <fbt desc="Knee label">Knee</fbt>
                   </Text>
-                  <Text style={[styles.metricValue, getScoreColor(analysis.kneeFlexion)]}>
+                  <Text
+                    style={[
+                      styles.metricValue,
+                      getScoreColor(analysis.kneeFlexion),
+                    ]}
+                  >
                     {analysis.kneeFlexion}%
                   </Text>
                 </View>
@@ -413,7 +428,12 @@ export default function PoseDetectionWebViewScreen() {
                   <Text style={styles.metricLabel}>
                     <fbt desc="Balance label">Balance</fbt>
                   </Text>
-                  <Text style={[styles.metricValue, getScoreColor(analysis.balanceScore)]}>
+                  <Text
+                    style={[
+                      styles.metricValue,
+                      getScoreColor(analysis.balanceScore),
+                    ]}
+                  >
                     {analysis.balanceScore}%
                   </Text>
                 </View>
@@ -422,7 +442,9 @@ export default function PoseDetectionWebViewScreen() {
                   <Text style={styles.metricLabel}>
                     <fbt desc="Position label">Position</fbt>
                   </Text>
-                  <Text style={styles.metricValue}>{analysis.racketPosition}</Text>
+                  <Text style={styles.metricValue}>
+                    {analysis.racketPosition}
+                  </Text>
                 </View>
               </View>
 
@@ -445,54 +467,21 @@ export default function PoseDetectionWebViewScreen() {
 }
 
 function getScoreColor(score: number) {
-  if (score >= 80) return { color: '#00FF00' };
-  if (score >= 60) return { color: '#FFFF00' };
+  if (score >= 80) {
+    return { color: '#00FF00' };
+  }
+  if (score >= 60) {
+    return { color: '#FFFF00' };
+  }
   return { color: '#FF0000' };
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#fff',
-    marginTop: 16,
-    fontSize: 16,
-  },
-  errorOverlay: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(255, 0, 0, 0.9)',
-    padding: 16,
-    borderRadius: 8,
-  },
-  errorText: {
-    color: '#fff',
-    fontSize: 14,
-    textAlign: 'center',
-  },
   analysisOverlay: {
-    position: 'absolute',
-    top: 60,
     left: 16,
+    position: 'absolute',
     right: 16,
+    top: 60,
   },
   analysisPanel: {
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
@@ -500,46 +489,83 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   analysisTitle: {
+    color: '#00FF00',
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#00FF00',
     marginBottom: 12,
     textAlign: 'center',
+  },
+  container: {
+    backgroundColor: '#000',
+    flex: 1,
+  },
+  errorOverlay: {
+    backgroundColor: 'rgba(255, 0, 0, 0.9)',
+    borderRadius: 8,
+    left: 20,
+    padding: 16,
+    position: 'absolute',
+    right: 20,
+    top: 20,
+  },
+  errorText: {
+    color: '#fff',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  loadingOverlay: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 16,
+  },
+  metric: {
+    marginBottom: 12,
+    width: '30%',
+  },
+  metricLabel: {
+    color: '#aaa',
+    fontSize: 11,
+    marginBottom: 4,
   },
   metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  metric: {
-    width: '30%',
-    marginBottom: 12,
-  },
-  metricLabel: {
-    fontSize: 11,
-    color: '#aaa',
-    marginBottom: 4,
-  },
   metricValue: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff',
   },
   suggestions: {
+    borderTopColor: '#333',
+    borderTopWidth: 1,
     marginTop: 12,
     paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#333',
   },
   suggestionsTitle: {
+    color: '#00FF00',
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#00FF00',
     marginBottom: 8,
   },
   suggestionText: {
-    fontSize: 12,
     color: '#fff',
+    fontSize: 12,
     marginBottom: 4,
+  },
+  webview: {
+    backgroundColor: '#000',
+    flex: 1,
   },
 });
