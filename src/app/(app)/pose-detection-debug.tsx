@@ -36,8 +36,8 @@ export default function PoseDetectionDebugScreen() {
           setAnalysis(data.payload);
           break;
         case 'error':
-          addLog(`Error: ${data.message}`);
-          setError(data.message);
+          addLog(`Error: ${data.payload?.message || data.message || 'Unknown error'}`);
+          setError(data.payload?.message || data.message || 'Unknown error');
           setIsLoading(false);
           break;
         case 'ready':
@@ -45,10 +45,10 @@ export default function PoseDetectionDebugScreen() {
           setIsLoading(false);
           break;
         case 'log':
-          addLog(`WebView: ${data.message}`);
+          addLog(`WebView: ${data.payload?.message || data.message || 'No message'}`);
           break;
         case 'init':
-          addLog(`Init: ${data.message}`);
+          addLog(`Init: ${data.payload?.message || data.message || 'No message'}`);
           break;
       }
     } catch (err) {
@@ -129,17 +129,58 @@ export default function PoseDetectionDebugScreen() {
 
                 updateStatus('Waiting for MediaPipe library...');
 
-                // Load MediaPipe script dynamically
-                const script = document.createElement('script');
-                script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.js';
-                script.onload = async () => {
-                    sendMessage('init', { message: 'MediaPipe script loaded' });
-                    await initMediaPipe();
-                };
-                script.onerror = (e) => {
-                    sendMessage('error', { message: 'Failed to load MediaPipe script' });
-                };
-                document.head.appendChild(script);
+                // Try multiple CDNs
+                const cdns = [
+                    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.js',
+                    'https://unpkg.com/@mediapipe/tasks-vision@0.10.14/vision_bundle.js',
+                    'https://cdn.skypack.dev/@mediapipe/tasks-vision@0.10.14'
+                ];
+
+                let loaded = false;
+                
+                for (const cdn of cdns) {
+                    if (loaded) break;
+                    
+                    try {
+                        sendMessage('log', { message: 'Trying CDN: ' + cdn });
+                        
+                        await new Promise((resolve, reject) => {
+                            const script = document.createElement('script');
+                            script.src = cdn;
+                            script.crossOrigin = 'anonymous';
+                            
+                            const timeout = setTimeout(() => {
+                                reject(new Error('Timeout loading from ' + cdn));
+                            }, 15000);
+                            
+                            script.onload = () => {
+                                clearTimeout(timeout);
+                                sendMessage('init', { message: 'MediaPipe loaded from: ' + cdn });
+                                loaded = true;
+                                resolve();
+                            };
+                            
+                            script.onerror = (e) => {
+                                clearTimeout(timeout);
+                                reject(new Error('Failed to load from ' + cdn));
+                            };
+                            
+                            document.head.appendChild(script);
+                        });
+                        
+                        if (loaded) {
+                            await initMediaPipe();
+                            break;
+                        }
+                    } catch (e) {
+                        sendMessage('log', { message: 'CDN failed: ' + e.message });
+                        continue;
+                    }
+                }
+                
+                if (!loaded) {
+                    throw new Error('All CDNs failed. Check internet connection.');
+                }
 
             } catch (error) {
                 sendMessage('error', { message: 'Init error: ' + error.message });
