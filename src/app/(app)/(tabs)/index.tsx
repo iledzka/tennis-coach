@@ -35,22 +35,12 @@ export default function Index() {
           </Text>
         </Stack>
         <Stack gap={16} className="mt-8">
-          <Link href="/pose-detection-simple" asChild>
+          <Link href="/pose-detection-hybrid" asChild>
             <TouchableOpacity
               className="rounded-lg bg-accent px-6 py-3"
             >
               <Text className="text-center font-bold text-white">
-                <fbt desc="Pose detection button">Live Pose Detection (ES Modules)</fbt>
-              </Text>
-            </TouchableOpacity>
-          </Link>
-          
-          <Link href="/pose-detection-debug" asChild>
-            <TouchableOpacity
-              className="rounded-lg bg-accent px-6 py-3"
-            >
-              <Text className="text-center font-bold text-white">
-                <fbt desc="Pose detection button">Live Pose Detection (Debug)</fbt>
+                <fbt desc="Pose detection button">Live Pose Detection ⭐</fbt>
               </Text>
             </TouchableOpacity>
           </Link>

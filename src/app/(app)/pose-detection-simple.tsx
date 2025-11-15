@@ -330,6 +330,8 @@ export default function PoseDetectionSimpleScreen() {
           javaScriptEnabled={true}
           domStorageEnabled={true}
           startInLoadingState={false}
+          allowsProtectedMedia={true}
+          mediaCapturePermissionGrantType="grant"
           onError={(syntheticEvent) => {
             const { nativeEvent } = syntheticEvent;
             addLog(`WebView error: ${JSON.stringify(nativeEvent)}`);
@@ -337,6 +339,14 @@ export default function PoseDetectionSimpleScreen() {
           }}
           onLoadStart={() => addLog('WebView loading started')}
           onLoadEnd={() => addLog('WebView loading completed')}
+          onPermissionRequest={(request) => {
+            addLog(`Permission requested: ${request.nativeEvent.resources.join(', ')}`);
+            request.nativeEvent.resources.forEach((resource) => {
+              if (resource === 'camera' || resource === 'microphone') {
+                request.nativeEvent.grant(request.nativeEvent.resources);
+              }
+            });
+          }}
         />
 
         {isLoading && (
