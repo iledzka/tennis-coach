@@ -34,12 +34,12 @@ export default function Index() {
             </fbt>
           </Text>
         </Stack>
-        <Link href="/pose-detection" asChild>
+        <Link href="/pose-detection-webview" asChild>
           <TouchableOpacity
             className="mt-8 rounded-lg bg-accent px-6 py-3"
           >
             <Text className="text-center font-bold text-white">
-              <fbt desc="Pose detection button">Try Pose Detection POC</fbt>
+              <fbt desc="Pose detection button">Try Pose Detection (WebView)</fbt>
             </Text>
           </TouchableOpacity>
         </Link>
