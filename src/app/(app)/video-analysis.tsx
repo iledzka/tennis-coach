@@ -56,10 +56,19 @@ export default function VideoAnalysisScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        setVideoUri(result.assets[0].uri);
+        const uri = result.assets[0].uri;
+        console.log('Video selected:', uri);
+        setVideoUri(uri);
         setResult(null);
         setError(null);
         setProgress(0);
+        
+        // Show info about the video
+        Alert.alert(
+          'Video Selected',
+          `Video ready to analyze!\nURI: ${uri.substring(0, 50)}...`,
+          [{ text: 'OK' }]
+        );
       }
     } catch (err) {
       console.error('Error picking video:', err);
@@ -70,11 +79,25 @@ export default function VideoAnalysisScreen() {
   const analyzeVideo = () => {
     if (!videoUri) return;
 
+    // Note: Video analysis in WebView has limitations with local file access
+    Alert.alert(
+      'Feature In Development',
+      'Video analysis from gallery is currently being optimized. For now, please use the Live Pose Detection feature.\n\nComing soon:\n• Upload video from gallery\n• Frame-by-frame analysis\n• Progress tracking\n• Detailed reports',
+      [{ text: 'OK' }]
+    );
+    
+    return;
+
+    // TODO: Implement proper video loading
+    // Options:
+    // 1. Convert video to base64 (memory intensive)
+    // 2. Use expo-av to extract frames
+    // 3. Use native video processing
+    
     setIsAnalyzing(true);
     setProgress(0);
     setError(null);
 
-    // Send message to WebView to start analysis
     webViewRef.current?.postMessage(JSON.stringify({
       type: 'analyzeVideo',
       videoUri: videoUri,
@@ -394,9 +417,18 @@ export default function VideoAnalysisScreen() {
               onPress={analyzeVideo}
             >
               <Text style={styles.buttonText}>
-                <fbt desc="Analyze button">Analyze Video</fbt>
+                <fbt desc="Analyze button">Analyze Video (Coming Soon)</fbt>
               </Text>
             </TouchableOpacity>
+          )}
+          
+          {videoUri && (
+            <View style={styles.infoBox}>
+              <Text style={styles.infoText}>
+                ℹ️ Video selected! Analysis feature is being optimized.{'\n'}
+                Use "Live Pose Detection" for real-time analysis.
+              </Text>
+            </View>
           )}
         </View>
 
@@ -672,5 +704,21 @@ const styles = StyleSheet.create({
   newAnalysisButton: {
     marginTop: 10,
     alignSelf: 'center',
+  },
+  infoBox: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 136, 255, 0.9)',
+    padding: 16,
+    borderRadius: 8,
+    zIndex: 10,
+  },
+  infoText: {
+    color: '#fff',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
