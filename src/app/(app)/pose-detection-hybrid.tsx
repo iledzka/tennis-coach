@@ -330,7 +330,12 @@ export default function PoseDetectionHybridScreen() {
         }}
       />
       <View style={styles.container}>
-        <CameraView ref={cameraRef} style={styles.camera} facing={facing}>
+        <CameraView 
+          ref={cameraRef} 
+          style={styles.camera} 
+          facing={facing}
+          mode="picture"
+        >
           <View style={styles.controls}>
             <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
               <Text style={styles.text}>Flip</Text>
@@ -453,7 +458,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   camera: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
   },
   message: {
     textAlign: 'center',
