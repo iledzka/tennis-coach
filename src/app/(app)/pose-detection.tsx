@@ -1,7 +1,11 @@
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import { CameraType, CameraView, useCameraPermissions } from 'expo-camera';
 import { useEffect, useRef, useState } from 'react';
 import { Button, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { PoseDetector, TennisPostureAnalysis, POSE_CONNECTIONS } from '../../lib/mediapipe/PoseDetector';
+import {
+  POSE_CONNECTIONS,
+  PoseDetector,
+  TennisPostureAnalysis,
+} from '../../lib/mediapipe/PoseDetector';
 
 export default function PoseDetectionScreen() {
   const [facing, setFacing] = useState<CameraType>('back');
@@ -15,26 +19,26 @@ export default function PoseDetectionScreen() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastFrameTimeRef = useRef<number>(0);
-  const fpsCounterRef = useRef<number[]>([]);
+  const fpsCounterRef = useRef<Array<number>>([]);
 
   useEffect(() => {
+    const initializePoseDetector = async () => {
+      try {
+        const detector = new PoseDetector();
+        await detector.initialize();
+        poseDetectorRef.current = detector;
+        console.log('PoseDetector initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize PoseDetector:', error);
+      }
+    };
+
     initializePoseDetector();
 
     return () => {
       cleanup();
     };
   }, []);
-
-  const initializePoseDetector = async () => {
-    try {
-      const detector = new PoseDetector();
-      await detector.initialize();
-      poseDetectorRef.current = detector;
-      console.log('PoseDetector initialized successfully');
-    } catch (error) {
-      console.error('Failed to initialize PoseDetector:', error);
-    }
-  };
 
   const cleanup = () => {
     if (animationFrameRef.current) {
@@ -63,7 +67,12 @@ export default function PoseDetectionScreen() {
   };
 
   const detectPose = async () => {
-    if (!isDetecting || !poseDetectorRef.current || !videoRef.current || !canvasRef.current) {
+    if (
+      !isDetecting ||
+      !poseDetectorRef.current ||
+      !videoRef.current ||
+      !canvasRef.current
+    ) {
       return;
     }
 
@@ -98,11 +107,12 @@ export default function PoseDetectionScreen() {
         if (fpsCounterRef.current.length > 30) {
           fpsCounterRef.current.shift();
         }
-        const avgFps = fpsCounterRef.current.reduce((a, b) => a + b, 0) / fpsCounterRef.current.length;
+        const avgFps =
+          fpsCounterRef.current.reduce((a, b) => a + b, 0) /
+          fpsCounterRef.current.length;
         setFps(Math.round(avgFps));
       }
       lastFrameTimeRef.current = now;
-
     } catch (error) {
       console.error('Pose detection error:', error);
     }
@@ -122,7 +132,9 @@ export default function PoseDetectionScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <Text style={styles.message}>We need your permission to show the camera</Text>
+        <Text style={styles.message}>
+          We need your permission to show the camera
+        </Text>
         <Button onPress={requestPermission} title="Grant Permission" />
       </View>
     );
@@ -130,24 +142,24 @@ export default function PoseDetectionScreen() {
 
   return (
     <View style={styles.container}>
-      <CameraView style={styles.camera} facing={facing}>
+      <CameraView facing={facing} style={styles.camera}>
         <View style={styles.overlay}>
           <canvas
+            height={480}
             ref={canvasRef}
             style={styles.canvas}
             width={640}
-            height={480}
           />
         </View>
 
         <View style={styles.controls}>
-          <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
+          <TouchableOpacity onPress={toggleCameraFacing} style={styles.button}>
             <Text style={styles.text}>Flip Camera</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, isDetecting && styles.buttonActive]}
             onPress={isDetecting ? stopDetection : startDetection}
+            style={[styles.button, isDetecting && styles.buttonActive]}
           >
             <Text style={styles.text}>
               {isDetecting ? 'Stop Detection' : 'Start Detection'}
@@ -159,31 +171,48 @@ export default function PoseDetectionScreen() {
           <View style={styles.analysisPanel}>
             <Text style={styles.analysisTitle}>Tennis Posture Analysis</Text>
             <Text style={styles.analysisFps}>FPS: {fps}</Text>
-            
+
             <View style={styles.scoreRow}>
               <Text style={styles.scoreLabel}>Shoulder Alignment:</Text>
-              <Text style={[styles.scoreValue, getScoreColor(analysis.shoulderAlignment)]}>
+              <Text
+                style={[
+                  styles.scoreValue,
+                  getScoreColor(analysis.shoulderAlignment),
+                ]}
+              >
                 {analysis.shoulderAlignment}%
               </Text>
             </View>
 
             <View style={styles.scoreRow}>
               <Text style={styles.scoreLabel}>Hip Alignment:</Text>
-              <Text style={[styles.scoreValue, getScoreColor(analysis.hipAlignment)]}>
+              <Text
+                style={[
+                  styles.scoreValue,
+                  getScoreColor(analysis.hipAlignment),
+                ]}
+              >
                 {analysis.hipAlignment}%
               </Text>
             </View>
 
             <View style={styles.scoreRow}>
               <Text style={styles.scoreLabel}>Knee Flexion:</Text>
-              <Text style={[styles.scoreValue, getScoreColor(analysis.kneeFlexion)]}>
+              <Text
+                style={[styles.scoreValue, getScoreColor(analysis.kneeFlexion)]}
+              >
                 {analysis.kneeFlexion}%
               </Text>
             </View>
 
             <View style={styles.scoreRow}>
               <Text style={styles.scoreLabel}>Balance:</Text>
-              <Text style={[styles.scoreValue, getScoreColor(analysis.balanceScore)]}>
+              <Text
+                style={[
+                  styles.scoreValue,
+                  getScoreColor(analysis.balanceScore),
+                ]}
+              >
                 {analysis.balanceScore}%
               </Text>
             </View>
@@ -209,112 +238,116 @@ export default function PoseDetectionScreen() {
 }
 
 function getScoreColor(score: number): { color: string } {
-  if (score >= 80) return { color: '#00FF00' };
-  if (score >= 60) return { color: '#FFFF00' };
+  if (score >= 80) {
+    return { color: '#00FF00' };
+  }
+  if (score >= 60) {
+    return { color: '#FFFF00' };
+  }
   return { color: '#FF0000' };
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    backgroundColor: '#000',
+  analysisFps: {
+    color: '#aaa',
+    fontSize: 12,
+    marginBottom: 12,
   },
-  message: {
-    textAlign: 'center',
-    paddingBottom: 10,
+  analysisPanel: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    borderRadius: 12,
+    left: 20,
+    padding: 16,
+    position: 'absolute',
+    right: 20,
+    top: 20,
+  },
+  analysisTitle: {
     color: '#fff',
-  },
-  camera: {
-    flex: 1,
-  },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  canvas: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-  },
-  controls: {
-    position: 'absolute',
-    bottom: 20,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 20,
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
   },
   button: {
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    borderColor: '#fff',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#fff',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
   },
   buttonActive: {
     backgroundColor: 'rgba(255, 0, 0, 0.6)',
   },
-  text: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: 'white',
+  camera: {
+    flex: 1,
   },
-  analysisPanel: {
+  canvas: {
+    height: '100%',
+    left: 0,
     position: 'absolute',
-    top: 20,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    padding: 16,
-    borderRadius: 12,
+    top: 0,
+    width: '100%',
   },
-  analysisTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  container: {
+    backgroundColor: '#000',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  controls: {
+    bottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    left: 0,
+    paddingHorizontal: 20,
+    position: 'absolute',
+    right: 0,
+  },
+  message: {
     color: '#fff',
-    marginBottom: 8,
+    paddingBottom: 10,
+    textAlign: 'center',
   },
-  analysisFps: {
-    fontSize: 12,
-    color: '#aaa',
-    marginBottom: 12,
+  overlay: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  scoreLabel: {
+    color: '#fff',
+    fontSize: 14,
   },
   scoreRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  scoreLabel: {
-    fontSize: 14,
-    color: '#fff',
-  },
   scoreValue: {
     fontSize: 14,
     fontWeight: 'bold',
   },
   suggestions: {
+    borderTopColor: '#444',
+    borderTopWidth: 1,
     marginTop: 12,
     paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#444',
   },
   suggestionsTitle: {
+    color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#fff',
     marginBottom: 6,
   },
   suggestionText: {
-    fontSize: 12,
     color: '#fff',
+    fontSize: 12,
     marginBottom: 4,
+  },
+  text: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

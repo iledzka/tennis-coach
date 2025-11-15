@@ -1,25 +1,30 @@
-import { PoseLandmarker, FilesetResolver, DrawingUtils } from '@mediapipe/tasks-vision';
+import { FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 
 export interface PoseLandmark {
+  visibility?: number;
   x: number;
   y: number;
   z: number;
-  visibility?: number;
 }
 
 export interface PoseDetectionResult {
-  landmarks: PoseLandmark[][];
-  worldLandmarks: PoseLandmark[][];
+  landmarks: Array<Array<PoseLandmark>>;
   timestamp: number;
+  worldLandmarks: Array<Array<PoseLandmark>>;
 }
 
 export interface TennisPostureAnalysis {
-  shoulderAlignment: number; // 0-100 score
+  balanceScore: number;
   hipAlignment: number;
   kneeFlexion: number;
-  racketPosition: 'ready' | 'backswing' | 'contact' | 'follow-through' | 'unknown';
-  balanceScore: number;
-  suggestions: string[];
+  racketPosition:
+    | 'ready'
+    | 'backswing'
+    | 'contact'
+    | 'follow-through'
+    | 'unknown';
+  shoulderAlignment: number; // 0-100 score
+  suggestions: Array<string>;
 }
 
 export class PoseDetector {
@@ -27,23 +32,26 @@ export class PoseDetector {
   private initialized = false;
 
   async initialize(): Promise<void> {
-    if (this.initialized) return;
+    if (this.initialized) {
+      return;
+    }
 
     try {
       const vision = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm',
       );
 
       this.poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
         baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
           delegate: 'GPU',
+          modelAssetPath:
+            'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
         },
-        runningMode: 'VIDEO',
-        numPoses: 1,
         minPoseDetectionConfidence: 0.5,
         minPosePresenceConfidence: 0.5,
         minTrackingConfidence: 0.5,
+        numPoses: 1,
+        runningMode: 'VIDEO',
       });
 
       this.initialized = true;
@@ -55,7 +63,7 @@ export class PoseDetector {
 
   async detectPose(
     videoFrame: HTMLVideoElement | HTMLCanvasElement,
-    timestamp: number
+    timestamp: number,
   ): Promise<PoseDetectionResult | null> {
     if (!this.poseLandmarker || !this.initialized) {
       throw new Error('PoseDetector not initialized. Call initialize() first.');
@@ -70,8 +78,8 @@ export class PoseDetector {
 
       return {
         landmarks: result.landmarks,
-        worldLandmarks: result.worldLandmarks || [],
         timestamp,
+        worldLandmarks: result.worldLandmarks || [],
       };
     } catch (error) {
       console.error('Pose detection error:', error);
@@ -79,14 +87,14 @@ export class PoseDetector {
     }
   }
 
-  analyzeTennisPosture(landmarks: PoseLandmark[]): TennisPostureAnalysis {
+  analyzeTennisPosture(landmarks: Array<PoseLandmark>): TennisPostureAnalysis {
     if (landmarks.length < 33) {
       return {
-        shoulderAlignment: 0,
+        balanceScore: 0,
         hipAlignment: 0,
         kneeFlexion: 0,
         racketPosition: 'unknown',
-        balanceScore: 0,
+        shoulderAlignment: 0,
         suggestions: ['Unable to detect full body pose'],
       };
     }
@@ -103,11 +111,11 @@ export class PoseDetector {
     const LEFT_WRIST = 15;
     const RIGHT_WRIST = 16;
 
-    const suggestions: string[] = [];
+    const suggestions: Array<string> = [];
 
     // Calculate shoulder alignment (should be level)
     const shoulderDiff = Math.abs(
-      landmarks[LEFT_SHOULDER].y - landmarks[RIGHT_SHOULDER].y
+      landmarks[LEFT_SHOULDER].y - landmarks[RIGHT_SHOULDER].y,
     );
     const shoulderAlignment = Math.max(0, 100 - shoulderDiff * 500);
 
@@ -127,12 +135,12 @@ export class PoseDetector {
     const leftKneeAngle = this.calculateAngle(
       landmarks[LEFT_HIP],
       landmarks[LEFT_KNEE],
-      landmarks[LEFT_ANKLE]
+      landmarks[LEFT_ANKLE],
     );
     const rightKneeAngle = this.calculateAngle(
       landmarks[RIGHT_HIP],
       landmarks[RIGHT_KNEE],
-      landmarks[RIGHT_ANKLE]
+      landmarks[RIGHT_ANKLE],
     );
     const avgKneeAngle = (leftKneeAngle + rightKneeAngle) / 2;
 
@@ -147,7 +155,8 @@ export class PoseDetector {
 
     // Determine racket position based on wrist position
     const avgWristY = (landmarks[LEFT_WRIST].y + landmarks[RIGHT_WRIST].y) / 2;
-    const avgShoulderY = (landmarks[LEFT_SHOULDER].y + landmarks[RIGHT_SHOULDER].y) / 2;
+    const avgShoulderY =
+      (landmarks[LEFT_SHOULDER].y + landmarks[RIGHT_SHOULDER].y) / 2;
     const avgWristX = (landmarks[LEFT_WRIST].x + landmarks[RIGHT_WRIST].x) / 2;
 
     let racketPosition: TennisPostureAnalysis['racketPosition'] = 'unknown';
@@ -164,12 +173,15 @@ export class PoseDetector {
 
     // Calculate balance score based on center of mass
     const centerX = (landmarks[LEFT_HIP].x + landmarks[RIGHT_HIP].x) / 2;
-    const feetCenterX = (landmarks[LEFT_ANKLE].x + landmarks[RIGHT_ANKLE].x) / 2;
+    const feetCenterX =
+      (landmarks[LEFT_ANKLE].x + landmarks[RIGHT_ANKLE].x) / 2;
     const balanceOffset = Math.abs(centerX - feetCenterX);
     const balanceScore = Math.max(0, 100 - balanceOffset * 300);
 
     if (balanceScore < 70) {
-      suggestions.push('Improve your balance - center your weight over your feet');
+      suggestions.push(
+        'Improve your balance - center your weight over your feet',
+      );
     }
 
     if (suggestions.length === 0) {
@@ -177,16 +189,20 @@ export class PoseDetector {
     }
 
     return {
-      shoulderAlignment: Math.round(shoulderAlignment),
+      balanceScore: Math.round(balanceScore),
       hipAlignment: Math.round(hipAlignment),
       kneeFlexion: Math.round(kneeFlexion),
       racketPosition,
-      balanceScore: Math.round(balanceScore),
+      shoulderAlignment: Math.round(shoulderAlignment),
       suggestions,
     };
   }
 
-  private calculateAngle(a: PoseLandmark, b: PoseLandmark, c: PoseLandmark): number {
+  private calculateAngle(
+    a: PoseLandmark,
+    b: PoseLandmark,
+    c: PoseLandmark,
+  ): number {
     const radians =
       Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
     let angle = Math.abs((radians * 180.0) / Math.PI);
@@ -200,11 +216,13 @@ export class PoseDetector {
 
   drawLandmarks(
     canvas: HTMLCanvasElement,
-    landmarks: PoseLandmark[],
-    connections?: Array<[number, number]>
+    landmarks: Array<PoseLandmark>,
+    connections?: Array<[number, number]>,
   ): void {
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     // Draw connections
     if (connections) {
@@ -216,11 +234,11 @@ export class PoseDetector {
           ctx.beginPath();
           ctx.moveTo(
             landmarks[start].x * canvas.width,
-            landmarks[start].y * canvas.height
+            landmarks[start].y * canvas.height,
           );
           ctx.lineTo(
             landmarks[end].x * canvas.width,
-            landmarks[end].y * canvas.height
+            landmarks[end].y * canvas.height,
           );
           ctx.stroke();
         }
@@ -236,7 +254,7 @@ export class PoseDetector {
         landmark.y * canvas.height,
         5,
         0,
-        2 * Math.PI
+        2 * Math.PI,
       );
       ctx.fill();
     });
@@ -253,9 +271,39 @@ export class PoseDetector {
 
 // Pose landmark connections for drawing skeleton
 export const POSE_CONNECTIONS: Array<[number, number]> = [
-  [0, 1], [1, 2], [2, 3], [3, 7], [0, 4], [4, 5], [5, 6], [6, 8],
-  [9, 10], [11, 12], [11, 13], [13, 15], [15, 17], [15, 19], [15, 21],
-  [17, 19], [12, 14], [14, 16], [16, 18], [16, 20], [16, 22], [18, 20],
-  [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [27, 29], [27, 31],
-  [29, 31], [24, 26], [26, 28], [28, 30], [28, 32], [30, 32],
+  [0, 1],
+  [1, 2],
+  [2, 3],
+  [3, 7],
+  [0, 4],
+  [4, 5],
+  [5, 6],
+  [6, 8],
+  [9, 10],
+  [11, 12],
+  [11, 13],
+  [13, 15],
+  [15, 17],
+  [15, 19],
+  [15, 21],
+  [17, 19],
+  [12, 14],
+  [14, 16],
+  [16, 18],
+  [16, 20],
+  [16, 22],
+  [18, 20],
+  [11, 23],
+  [12, 24],
+  [23, 24],
+  [23, 25],
+  [25, 27],
+  [27, 29],
+  [27, 31],
+  [29, 31],
+  [24, 26],
+  [26, 28],
+  [28, 30],
+  [28, 32],
+  [30, 32],
 ];
