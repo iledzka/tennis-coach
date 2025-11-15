@@ -14,7 +14,7 @@ interface PoseAnalysis {
   fps: number;
 }
 
-export default function PoseDetectionDebugScreen() {
+export default function PoseDetectionSimpleScreen() {
   const webViewRef = useRef<WebView>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [analysis, setAnalysis] = useState<PoseAnalysis | null>(null);
@@ -28,7 +28,6 @@ export default function PoseDetectionDebugScreen() {
 
   const handleMessage = (event: WebViewMessageEvent) => {
     try {
-      addLog(`Received: ${event.nativeEvent.data.substring(0, 100)}`);
       const data = JSON.parse(event.nativeEvent.data);
       
       switch (data.type) {
@@ -36,8 +35,8 @@ export default function PoseDetectionDebugScreen() {
           setAnalysis(data.payload);
           break;
         case 'error':
-          addLog(`Error: ${data.payload?.message || data.message || 'Unknown error'}`);
-          setError(data.payload?.message || data.message || 'Unknown error');
+          addLog(`Error: ${data.payload?.message || data.message}`);
+          setError(data.payload?.message || data.message);
           setIsLoading(false);
           break;
         case 'ready':
@@ -45,10 +44,7 @@ export default function PoseDetectionDebugScreen() {
           setIsLoading(false);
           break;
         case 'log':
-          addLog(`WebView: ${data.payload?.message || data.message || 'No message'}`);
-          break;
-        case 'init':
-          addLog(`Init: ${data.payload?.message || data.message || 'No message'}`);
+          addLog(`WebView: ${data.payload?.message || data.message}`);
           break;
       }
     } catch (err) {
@@ -56,6 +52,7 @@ export default function PoseDetectionDebugScreen() {
     }
   };
 
+  // Use a working CDN URL that we know loads properly
   const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -72,7 +69,6 @@ export default function PoseDetectionDebugScreen() {
             position: absolute; top: 20px; left: 20px; right: 20px;
             background: rgba(0, 0, 0, 0.8); color: white; padding: 10px;
             border-radius: 5px; font-family: Arial, sans-serif; font-size: 14px;
-            z-index: 10;
         }
     </style>
 </head>
@@ -83,148 +79,58 @@ export default function PoseDetectionDebugScreen() {
         <div id="status">Initializing...</div>
     </div>
 
-    <script>
-        // Test message sending immediately
+    <script type="module">
         function sendMessage(type, payload) {
             try {
-                const msg = JSON.stringify({ type, payload: payload || {} });
-                
                 if (window.ReactNativeWebView) {
-                    window.ReactNativeWebView.postMessage(msg);
-                    return true;
-                } else {
-                    console.error('ReactNativeWebView not found');
-                    return false;
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type, payload: payload || {} }));
                 }
             } catch (e) {
                 console.error('Send error:', e);
-                return false;
             }
         }
 
-        // Send test message immediately
-        setTimeout(() => {
-            const sent = sendMessage('init', { message: 'WebView script loaded' });
-            console.log('Test message sent:', sent);
-        }, 100);
+        function log(msg) {
+            console.log(msg);
+            sendMessage('log', { message: msg });
+        }
 
-        let video, canvas, ctx, poseLandmarker;
+        function updateStatus(msg) {
+            document.getElementById('status').textContent = msg;
+            log(msg);
+        }
+
+        let video, canvas, ctx;
         let isDetecting = false;
         let animationFrameId;
         let lastFrameTime = 0;
         let fpsCounter = [];
 
-        function updateStatus(msg) {
-            document.getElementById('status').textContent = msg;
-            sendMessage('log', { message: msg });
-        }
-
         async function init() {
             try {
-                sendMessage('init', { message: 'Starting initialization' });
+                log('Starting initialization');
                 
                 video = document.getElementById('video');
                 canvas = document.getElementById('canvas');
                 ctx = canvas.getContext('2d');
 
-                updateStatus('Waiting for MediaPipe library...');
+                updateStatus('Loading MediaPipe...');
 
-                // Try multiple CDNs - use vision_bundle.js which exposes window.vision
-                const cdns = [
-                    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.js',
-                    'https://unpkg.com/@mediapipe/tasks-vision@0.10.14/vision_bundle.js',
-                    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.js'
-                ];
+                // Import MediaPipe using ES modules
+                const { PoseLandmarker, FilesetResolver } = await import(
+                    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14'
+                );
 
-                let loaded = false;
-                
-                for (const cdn of cdns) {
-                    if (loaded) break;
-                    
-                    try {
-                        sendMessage('log', { message: 'Trying CDN: ' + cdn });
-                        
-                        await new Promise((resolve, reject) => {
-                            const script = document.createElement('script');
-                            script.src = cdn;
-                            script.crossOrigin = 'anonymous';
-                            
-                            const timeout = setTimeout(() => {
-                                reject(new Error('Timeout loading from ' + cdn));
-                            }, 15000);
-                            
-                            script.onload = () => {
-                                clearTimeout(timeout);
-                                sendMessage('init', { message: 'MediaPipe loaded from: ' + cdn });
-                                loaded = true;
-                                resolve();
-                            };
-                            
-                            script.onerror = (e) => {
-                                clearTimeout(timeout);
-                                reject(new Error('Failed to load from ' + cdn));
-                            };
-                            
-                            document.head.appendChild(script);
-                        });
-                        
-                        if (loaded) {
-                            await initMediaPipe();
-                            break;
-                        }
-                    } catch (e) {
-                        sendMessage('log', { message: 'CDN failed: ' + e.message });
-                        continue;
-                    }
-                }
-                
-                if (!loaded) {
-                    throw new Error('All CDNs failed. Check internet connection.');
-                }
+                log('MediaPipe module imported');
+                updateStatus('Initializing pose detector...');
 
-            } catch (error) {
-                sendMessage('error', { message: 'Init error: ' + error.message });
-            }
-        }
-
-        async function initMediaPipe() {
-            try {
-                updateStatus('Initializing MediaPipe...');
-
-                // Wait for vision object with better logging
-                let attempts = 0;
-                const maxAttempts = 100; // 10 seconds
-                
-                while (!window.vision && attempts < maxAttempts) {
-                    await new Promise(r => setTimeout(r, 100));
-                    attempts++;
-                    
-                    if (attempts % 10 === 0) {
-                        sendMessage('log', { 
-                            message: \`Waiting for vision object... attempt \${attempts}/\${maxAttempts}\` 
-                        });
-                    }
-                }
-
-                if (!window.vision) {
-                    // Log what's available
-                    const available = Object.keys(window).filter(k => 
-                        k.toLowerCase().includes('media') || 
-                        k.toLowerCase().includes('vision') ||
-                        k.toLowerCase().includes('pose')
-                    );
-                    throw new Error(\`MediaPipe vision not available. Found: \${available.join(', ') || 'nothing'}\`);
-                }
-                
-                sendMessage('log', { message: 'Vision object found!' });
-
-                sendMessage('init', { message: 'Creating FilesetResolver' });
-                const vision = await window.vision.FilesetResolver.forVisionTasks(
+                const vision = await FilesetResolver.forVisionTasks(
                     'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
                 );
 
-                sendMessage('init', { message: 'Creating PoseLandmarker' });
-                poseLandmarker = await window.vision.PoseLandmarker.createFromOptions(vision, {
+                log('FilesetResolver created');
+
+                const poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
                     baseOptions: {
                         modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
                         delegate: 'GPU',
@@ -236,15 +142,20 @@ export default function PoseDetectionDebugScreen() {
                     minTrackingConfidence: 0.5,
                 });
 
-                sendMessage('init', { message: 'Starting camera' });
+                log('PoseLandmarker created');
+                updateStatus('Starting camera...');
+
                 await startCamera();
                 
+                log('Camera started');
                 sendMessage('ready', {});
                 updateStatus('Detecting pose...');
-                startDetection();
+                
+                startDetection(poseLandmarker);
 
             } catch (error) {
-                sendMessage('error', { message: 'MediaPipe init error: ' + error.message });
+                log('Init error: ' + error.message);
+                sendMessage('error', { message: 'Init error: ' + error.message });
             }
         }
 
@@ -275,47 +186,48 @@ export default function PoseDetectionDebugScreen() {
             }
         }
 
-        function startDetection() {
+        function startDetection(poseLandmarker) {
             isDetecting = true;
-            detectPose();
-        }
+            
+            function detectPose() {
+                if (!isDetecting) return;
 
-        function detectPose() {
-            if (!isDetecting) return;
+                const now = performance.now();
 
-            const now = performance.now();
-
-            try {
-                if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
-                    animationFrameId = requestAnimationFrame(detectPose);
-                    return;
-                }
-
-                const result = poseLandmarker.detectForVideo(video, now);
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                if (result.landmarks && result.landmarks.length > 0) {
-                    const landmarks = result.landmarks[0];
-                    drawLandmarks(landmarks);
-                    const analysis = analyzeTennisPosture(landmarks);
-                    
-                    const deltaTime = now - lastFrameTime;
-                    if (deltaTime > 0) {
-                        fpsCounter.push(1000 / deltaTime);
-                        if (fpsCounter.length > 30) fpsCounter.shift();
-                        const avgFps = fpsCounter.reduce((a, b) => a + b, 0) / fpsCounter.length;
-                        analysis.fps = Math.round(avgFps);
+                try {
+                    if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+                        animationFrameId = requestAnimationFrame(detectPose);
+                        return;
                     }
-                    lastFrameTime = now;
 
-                    sendMessage('analysis', analysis);
+                    const result = poseLandmarker.detectForVideo(video, now);
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    if (result.landmarks && result.landmarks.length > 0) {
+                        const landmarks = result.landmarks[0];
+                        drawLandmarks(landmarks);
+                        const analysis = analyzeTennisPosture(landmarks);
+                        
+                        const deltaTime = now - lastFrameTime;
+                        if (deltaTime > 0) {
+                            fpsCounter.push(1000 / deltaTime);
+                            if (fpsCounter.length > 30) fpsCounter.shift();
+                            const avgFps = fpsCounter.reduce((a, b) => a + b, 0) / fpsCounter.length;
+                            analysis.fps = Math.round(avgFps);
+                        }
+                        lastFrameTime = now;
+
+                        sendMessage('analysis', analysis);
+                    }
+
+                } catch (error) {
+                    log('Detection error: ' + error.message);
                 }
 
-            } catch (error) {
-                sendMessage('error', { message: 'Detection error: ' + error.message });
+                animationFrameId = requestAnimationFrame(detectPose);
             }
-
-            animationFrameId = requestAnimationFrame(detectPose);
+            
+            detectPose();
         }
 
         function drawLandmarks(landmarks) {
@@ -393,7 +305,6 @@ export default function PoseDetectionDebugScreen() {
             return angle;
         }
 
-        // Start initialization
         init();
     </script>
 </body>
@@ -404,7 +315,7 @@ export default function PoseDetectionDebugScreen() {
     <>
       <Stack.Screen
         options={{
-          title: String(fbs('Pose Detection (Debug)', 'Debug pose detection screen title')),
+          title: String(fbs('Pose Detection (Simple)', 'Simple pose detection screen title')),
           headerShown: true,
         }}
       />
@@ -426,15 +337,12 @@ export default function PoseDetectionDebugScreen() {
           }}
           onLoadStart={() => addLog('WebView loading started')}
           onLoadEnd={() => addLog('WebView loading completed')}
-          onLoadProgress={({ nativeEvent }) => addLog(`Load progress: ${nativeEvent.progress * 100}%`)}
         />
 
         {isLoading && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color="#00ff00" />
-            <Text style={styles.loadingText}>
-              <fbt desc="Loading message">Loading MediaPipe...</fbt>
-            </Text>
+            <Text style={styles.loadingText}>Loading MediaPipe...</Text>
           </View>
         )}
 
@@ -501,7 +409,6 @@ export default function PoseDetectionDebugScreen() {
           </View>
         )}
 
-        {/* Debug logs */}
         <View style={styles.debugPanel}>
           <Text style={styles.debugTitle}>Debug Logs:</Text>
           {logs.map((log, index) => (
