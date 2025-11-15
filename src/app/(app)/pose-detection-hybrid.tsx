@@ -304,6 +304,10 @@ export default function PoseDetectionHybridScreen() {
       <View style={styles.container}>
         <Text style={styles.message}>Camera permission required</Text>
         <Button onPress={requestPermission} title="Grant Permission" />
+        <Text style={[styles.message, { marginTop: 20, fontSize: 12, color: '#888' }]}>
+          Note: Camera doesn't work in iOS Simulator.{'\n'}
+          Please test on a real device.
+        </Text>
       </View>
     );
   }
